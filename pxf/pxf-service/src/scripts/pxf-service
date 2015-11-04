@@ -13,6 +13,7 @@ pxf_user=pxf
 instance_name=pxf-service
 instance_port=51200
 instance_owner=pxf:pxf
+JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac))))
 
 curl=`which curl`
 

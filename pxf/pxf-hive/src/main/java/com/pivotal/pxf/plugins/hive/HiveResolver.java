@@ -63,6 +63,7 @@ public class HiveResolver extends Plugin implements ReadResolver {
     String nullChar = "\\N";
     private Configuration conf;
     private String hiveDefaultPartName;
+    private boolean isTransactional;
 
     /**
      * Constructs the HiveResolver by parsing the userdata in the input and
@@ -90,6 +91,9 @@ public class HiveResolver extends Plugin implements ReadResolver {
         Object tuple = deserializer.deserialize((Writable) onerow.getData());
         // Each Hive record is a Struct
         StructObjectInspector soi = (StructObjectInspector) deserializer.getObjectInspector();
+        if (isTransactional) {
+            tuple = skipTranactionalHeader(tuple);
+        }
         List<OneField> record = traverseStruct(tuple, soi, false);
         /*
          * We follow Hive convention. Partition fields are always added at the
@@ -98,6 +102,16 @@ public class HiveResolver extends Plugin implements ReadResolver {
         record.addAll(partitionFields);
 
         return record;
+    }
+
+    private Object skipTranactionalHeader(Object struct) throws Exception {
+        StructObjectInspector soi = (StructObjectInspector) deserializer.getObjectInspector();
+        List<Object> structFields = soi.getStructFieldsDataAsList(struct);
+        if (structFields == null) {
+            throw new BadRecordException(
+                    "Illegal value NULL for Hive data type Struct");
+        }
+        return structFields.get(structFields.size() - 1);
     }
 
     /* parse user data string (arrived from fragmenter) */
@@ -115,6 +129,10 @@ public class HiveResolver extends Plugin implements ReadResolver {
         serdeName = toks[1];
         propsString = toks[2];
         partitionKeys = toks[3];
+        isTransactional = propsString.contains("transactional=true");
+        if (isTransactional) {
+            LOG.debug("Table is transactional");
+        }
 
         collectionDelim = input.getUserProperty("COLLECTION_DELIM") == null ? COLLECTION_DELIM
                 : input.getUserProperty("COLLECTION_DELIM");
